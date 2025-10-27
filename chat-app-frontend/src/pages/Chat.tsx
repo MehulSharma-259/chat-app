@@ -45,14 +45,14 @@ const Chat = () => {
 
   // Fetch chats on component mount
   useEffect(() => {
-    if (!token) return;
+    if (!token || !user) return; // Add check for user
     fetchChats();
-  }, [token]);
-  
+  }, [token, user]); // Add user to dependency array
+
   // Fetch user's chats
   const fetchChats = async () => {
     if (!user) return;
-    
+
     try {
       // Create demo chats directly in the frontend for demonstration
       const demoChats = [
@@ -63,7 +63,7 @@ const Chat = () => {
           unreadCount: 1
         }
       ];
-      
+
       setChats(demoChats);
       setLoading(false);
       return;
@@ -171,10 +171,10 @@ const Chat = () => {
     }
     
     // Mark messages as read
-    if (selectedChat && messages.length > 0) {
+    if (selectedChat && messages.length > 0 && user) { // Add check for user
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage.sender.id !== user?.id) {
-        sendReadReceipt(lastMessage.id);
+      if (lastMessage.sender !== user.id) { // Access user.id directly
+        sendReadReceipt(lastMessage.id, lastMessage.sender, selectedChat.id);
       }
     }
   }, [messages, selectedChat, user, sendReadReceipt]);
@@ -304,21 +304,21 @@ const Chat = () => {
                 messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`mb-4 flex ${message.sender.id === user?.id ? 'justify-end' : 'justify-start'}`}
+                    className={`mb-4 flex ${message.sender === user?.id ? 'justify-end' : 'justify-start'}`}
                   >
                     <div
                       className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                        message.sender.id === user?.id
+                        message.sender === user?.id
                           ? 'bg-blue-500 text-white'
                           : 'bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white'
                       }`}
                     >
                       {message.content}
                       <div className="mt-1 text-xs flex justify-end">
-                        <span className={message.sender.id === user?.id ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}>
+                        <span className={message.sender === user?.id ? 'text-blue-100' : 'text-gray-500 dark:text-gray-400'}>
                           {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
-                        {message.sender.id === user?.id && (
+                        {message.sender === user?.id && (
                           <span className="ml-2">
                             {message.status === 'sent' && '✓'}
                             {message.status === 'delivered' && '✓✓'}

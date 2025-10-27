@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useAuth } from './AuthContext';
+import io, { Socket } from 'socket.io-client';
 
 interface WebSocketContextType {
   sendMessage: (chatId: string, content: string) => void;
   joinChat: (chatId: string) => void;
   sendTypingStatus: (chatId: string, isTyping: boolean) => void;
-  sendReadReceipt: (messageId: string) => void;
+  sendReadReceipt: (messageId: string, senderId: string, chatId: string) => void;
   onlineUsers: Set<string>;
   typingUsers: Map<string, string>;
 }
@@ -27,128 +28,90 @@ interface WebSocketProviderProps {
 
 export const WebSocketProvider = ({ children }: WebSocketProviderProps) => {
   const { token, user } = useAuth();
-  const ws = useRef<WebSocket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
   const [typingUsers, setTypingUsers] = useState<Map<string, string>>(new Map());
-  const [connected, setConnected] = useState(false);
 
   useEffect(() => {
     if (!token || !user) return;
-    
-    const socket = new WebSocket('ws://localhost:8000');
-    ws.current = socket;
-    
-    socket.onopen = () => {
-      console.log('WebSocket connected');
-      // Authenticate with token
-      socket.send(JSON.stringify({
-        type: 'auth',
-        payload: { token }
-      }));
-    };
-    
-    socket.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      
-      switch (data.type) {
-        case 'auth_success':
-          setConnected(true);
-          break;
-          
-        case 'user_status':
-          if (data.payload.status === 'online') {
-            setOnlineUsers(prev => new Set(prev).add(data.payload.userId));
-          } else {
-            setOnlineUsers(prev => {
-              const newSet = new Set(prev);
-              newSet.delete(data.payload.userId);
-              return newSet;
-            });
-          }
-          break;
-          
-        case 'typing':
-          if (data.payload.isTyping) {
-            setTypingUsers(prev => new Map(prev).set(data.payload.chatId, data.payload.username));
-          } else {
-            setTypingUsers(prev => {
-              const newMap = new Map(prev);
-              newMap.delete(data.payload.chatId);
-              return newMap;
-            });
-          }
-          break;
+
+    const newSocket = io('http://localhost:8000', {
+      auth: {
+        token: token
+      },
+      transports: ['websocket', 'polling']
+    });
+
+    socketRef.current = newSocket;
+
+    newSocket.on('connect', () => {
+      console.log('Socket.IO connected');
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('Socket.IO disconnected');
+    });
+
+    newSocket.on('user_status', (data: { userId: string; status: 'online' | 'offline' }) => {
+      if (data.status === 'online') {
+        setOnlineUsers(prev => new Set(prev).add(data.userId));
+      } else {
+        setOnlineUsers(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(data.userId);
+          return newSet;
+        });
       }
-    };
-    
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-    
-    socket.onclose = () => {
-      console.log('WebSocket disconnected');
-      setConnected(false);
-    };
-    
+    });
+
+    newSocket.on('typing', (data: { userId: string; chatId: string; username: string }) => {
+      setTypingUsers(prev => new Map(prev).set(data.chatId, data.username));
+    });
+
+    newSocket.on('stop_typing', (data: { userId: string; chatId: string }) => {
+      setTypingUsers(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(data.chatId);
+        return newMap;
+      });
+    });
+
+    newSocket.on('receive_message', (message: any) => {
+      console.log('Received message:', message);
+      // Handle incoming messages (e.g., update chat state)
+    });
+
     return () => {
-      socket.close();
+      newSocket.disconnect();
     };
   }, [token, user]);
 
   const sendMessage = (chatId: string, content: string) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !user) return;
-    
-    // For demo purposes, we'll simulate a successful message send
-    console.log('Sending message:', { chatId, content, userId: user.id });
-    
-    // Still try to send via WebSocket if connected
-    ws.current.send(JSON.stringify({
-      type: 'chat_message',
-      chatId,
-      content,
-      userId: user.id
-    }));
-    
-    return {
-      id: 'msg-' + Date.now(),
+    if (!socketRef.current || !user) return;
+    const messageData = {
       chatId,
       content,
       sender: user.id,
       timestamp: new Date().toISOString(),
       status: 'sent'
     };
+    socketRef.current.emit('send_message', messageData);
+    return { ...messageData, id: 'msg-' + Date.now() };
   };
 
   const joinChat = (chatId: string) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !user) return;
-    
-    ws.current.send(JSON.stringify({
-      type: 'join_chat',
-      chatId,
-      userId: user.id
-    }));
+    if (!socketRef.current || !user) return;
+    socketRef.current.emit('join_chat', chatId);
   };
 
   const sendTypingStatus = (chatId: string, isTyping: boolean) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !user) return;
-    
-    ws.current.send(JSON.stringify({
-      type: 'typing',
-      chatId,
-      isTyping,
-      userId: user.id
-    }));
+    if (!socketRef.current || !user) return;
+    socketRef.current.emit(isTyping ? 'typing' : 'stop_typing', { chatId, userId: user.id, username: user.username });
   };
 
   const sendReadReceipt = (messageId: string, senderId: string, chatId: string) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN || !user) return;
-    
-    ws.current.send(JSON.stringify({
-      type: 'read_receipt',
-      messageId,
-      senderId,
-      chatId
-    }));
+    if (!socketRef.current || !user) return;
+    socketRef.current.emit('read_receipt', { messageId, senderId, chatId });
   };
 
   const value = {
