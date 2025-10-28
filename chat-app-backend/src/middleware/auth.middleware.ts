@@ -2,26 +2,22 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt.utils';
 
-// Auth middleware to protect routes
-export const protect = (req: Request, res: Response, next: NextFunction) => {
+// **Ensure 'export' is present**
+export interface AuthenticatedRequest extends Request {
+    user?: { id: string };
+}
+
+export const protect = (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  // ... (rest of the function is likely correct from previous step)
   try {
-    // Get token from header
     const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ message: 'No token, authorization denied' });
-    }
-    
-    // Verify token
-    const decoded = verifyToken(token);
-    
-    // Add user from payload to request
-    // @ts-ignore
-    req.user = decoded;
-    
+    if (!token) return res.status(401).json({ message: 'No token, authorization denied' });
+    const decoded = verifyToken(token) as { id: string };
+    req.user = { id: decoded.id };
     next();
-  } catch (error) {
-    console.error('Auth middleware error:', error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown authentication error';
+    console.error('Auth middleware error:', errorMessage);
     res.status(401).json({ message: 'Token is not valid' });
   }
 };

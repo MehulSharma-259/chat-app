@@ -1,29 +1,30 @@
 /** @format */
 import mongoose from 'mongoose';
 
-// Message schema and model
+// Message schema for potential MongoDB use
 const messageSchema = new mongoose.Schema({
   sender: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   content: { type: String, required: true },
   timestamp: { type: Date, default: Date.now },
   readBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
-  chatId: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true }
+  chatId: { type: mongoose.Schema.Types.ObjectId, ref: 'Chat', required: true } // Consistent naming
 });
 
-// In-memory data for demo
+// Interface for in-memory message data
 export interface IMessage {
   _id: string;
-  sender: string;
+  sender: string; // User ID
   content: string;
-  chat: string;
-  status: string;
+  chatId: string; // **CORRECTED** property name from 'chat' to 'chatId'
+  status: 'sent' | 'delivered' | 'read'; // Added status types
   timestamp: Date;
+  readBy?: string[]; // **ADDED** Optional readBy array
 }
 
-// Export the messages array for in-memory storage
+// In-memory message store
 export const messages: IMessage[] = [];
 
-// Export the Message model
+// Export the Mongoose model
 export const Message = mongoose.model('Message', messageSchema);
 
-export default Message;
+// export default Message; // Keep commented unless using Mongoose connection
