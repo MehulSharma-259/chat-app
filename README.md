@@ -92,14 +92,16 @@ _Secure login page for user authentication._
 
 ---
 
-## ⚙️ Getting Started
+## Installation 🚀
 
-### ✅ Prerequisites
+### 1. Clone the Repository
 
-- Node.js ≥ 18
-- npm ≥ 9
+```bash
+git clone https://github.com/MehulSharma-259/chat-app.git
+cd chat-app
+```
 
-### 🧠 Backend Setup
+### 2.🧠 Backend Setup
 
 ```bash
 cd chat-app-backend
@@ -118,7 +120,7 @@ Run server:
 npm run dev
 ```
 
-### 💻 Frontend Setup
+### 3. 💻 Frontend Setup
 
 ```bash
 cd chat-app-frontend
